@@ -241,3 +241,141 @@ $SPARK_HOME/bin/spark-submit mmmcount.py data/mmm_dataset.csv
 </details>
 
 ## Chapter 3: Structured APIs
+
+<details>
+  <summary>What's Underneath an RDD</summary>
+
+### What's Underneath an RDD
+
+- Three RDD characteristics:
+1. Dependencies
+    * Instructs Spark how an RDD is constructed with its inputs.
+    * Allows Spark to recreate RDDs (resiliency).
+2. Partitions
+    * Spark can split the work to parallelize computation across executors.
+3. Compute function
+    * Produces an `Iterator[T]` for the data stored in the RDD.
+
+</details>
+
+<details>
+  <summary>Structuring Spark</summary>
+
+### Structuring Spark
+
+- Key schemes for structuring Spark starting in 2.x:
+1. Express computations with common data analysis patterns e.g., filtering, selecting, counting, etc.
+2. Set of common operators in a DSL to tell Spark what to compute with your data, allowing Spark to construct an efficient query plan for execution.
+3. Allow arrangement of data in a tabular format similar to SQL table or spreadsheet with supported structured data types
+
+### Key Benefits
+
+- Above structure allows Spark to increase expressivity and composability
+- Compare low-level RDD API for the following:
+```python
+# Create an RDD of tuples (name, age)
+dataRDD = sc.parallelize([("Brooke", 20), ("Denny", 31), ("Jules", 30), ("TD", 35), ("Brooke", 25)])
+# Use map and reduceByKey transformations with their lambda
+# expressions to aggregate and then compute average
+agesRDD = (dataRDD.map(lambda x: (x[0], (x[1], 1)))
+                  .reduceByKey(lambda x, y: (x[0] + y[0], x[1] + y[1]))
+                  .map(lambda x: (x[0], x[1][0]/x[1][1])))
+```
+- To using DSL ooperators and the DataFrame API:
+```python
+# In Python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import avg
+# Create a DataFrame using SparkSession
+spark = (SparkSession.builder
+                     .appName("AuthorsAges")
+                     .getOrCreate())
+# Create a DataFrame
+data_df = spark.createDataFrame([("Brooke", 20), ("Denny", 31), ("Jules", 30), ("TD", 35), ("Brooke", 25)], ["name", "age"])
+# Group the same names together, aggregate their ages, and compute an average
+avg_df = data_df.groupBy("name").agg(avg("age"))
+# Show the results of the final execution
+avg_df.show()
+```
+- Note that you can switch back to the unstructured low-level RDD API if you need more control about how computations are performed.
+- The simplicity and expressivity we observe is because of the Spark SQL engine that the high-level structured APIs are built on.
+
+</details>
+
+<details>
+  <summary>The DataFrame API</summary>
+
+### The DataFrame API
+
+- Inspired by Pandas DataFrames.
+- Distributed in-memory tables with named columns and schemas.
+- Each column has a specific data type e.g., integer, string, array, map, etc.
+- DataFrames are immutable and Spark keeps a lineage of all transformations
+
+### Spark's Basic Data Types
+
+- Spark supports basic internal data types of its supported programming languages.
+- For example, Python `float` is Spark data type `FloatType`.
+
+### Spark's Structured and Complex Data Types
+
+- Data will often be complex e.g., maps, arrays, structs, dates, timestamps, etc.
+- For example, Python `dict` is Spark data type `MapType` which can be instantiated with `MapType(keyType, valueType, [nullable])`.
+
+</details>
+
+<details>
+  <summary>Schemas and Creating DataFrames</summary>
+
+### Schemas and Creating DataFrames
+
+- Schema in Spark defines the column names and associated data types for a DataFrame.
+- Defining a schema up-front as opposed to a schema-on-read approach has benefits:
+1. Relieves Spark from having to infer data types.
+2. Prevents Spark from creating a separate job to read a large portion of data to ascertain the schema.
+3. Detect errors early if data doesn't match the schema.
+
+### Two Ways to Define a Schema
+
+- First way is to define it programmatically. For example:
+```python
+from pyspark.sql.types import *
+schema = StructType([StructField("author", StringType(), False),
+      StructField("title", StringType(), False),
+      StructField("pages", IntegerType(), False)])
+```
+- Second way is to employ a Data Definition Language (DDL) string. For example:
+```python
+schema = "author STRING, title STRING, pages INT"
+```
+- Example of creating a DataFrame for a given schema:
+```python
+from pyspark.sql import SparkSession
+
+# Define schema for our data using DDL
+schema = "`Id` INT, `First` STRING, `Last` STRING, `Url` STRING, `Published` STRING, `Hits` INT, `Campaigns` ARRAY<STRING>"
+
+# Create our static data
+data = [[1, "Jules", "Damji", "https://tinyurl.1", "1/4/2016", 4535, ["twitter", "LinkedIn"]],
+        [2, "Brooke","Wenig", "https://tinyurl.2", "5/5/2018", 8908, ["twitter", "LinkedIn"]],
+        [3, "Denny", "Lee", "https://tinyurl.3", "6/7/2019", 7659, ["web", "twitter", "FB", "LinkedIn"]],
+        [4, "Tathagata", "Das", "https://tinyurl.4", "5/12/2018", 10568, ["twitter", "FB"]],
+        [5, "Matei","Zaharia", "https://tinyurl.5", "5/14/2014", 40578, ["web", "twitter", "FB", "LinkedIn"]],
+        [6, "Reynold", "Xin", "https://tinyurl.6", "3/2/2015", 25568, ["twitter", "LinkedIn"]]]
+
+# Main program
+if __name__ == "__main__":
+    # Create a SparkSession
+    spark = (SparkSession
+         .builder
+         .appName("Example-3_6")
+         .getOrCreate())
+    # Create a DataFrame using the schema defined above
+    blogs_df = spark.createDataFrame(data, schema)
+    # Show the DataFrame; it should reflect our table above
+    blogs_df.show()
+    # Print the schema used by Spark to process the DataFrame
+    print(blogs_df.printSchema())
+```
+
+</details>
