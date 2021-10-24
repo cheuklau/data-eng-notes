@@ -4,6 +4,7 @@
 * [Chapter 1: Introduction](#chapter-1-introduction)
 * [Chapter 2: Getting Started](#chapter-2-getting-started)
 * [Chapter 3: Structured APIs](#chapter-3-structured-apis)
+* [Chapter 4: Spark SQL and DataFrames](#chapter-4-spark-sql-and-dataframes)
 
 ## Chapter 1: Introduction
 
@@ -378,4 +379,377 @@ if __name__ == "__main__":
     print(blogs_df.printSchema())
 ```
 
+### Columns and Expressions
+
+- In Spark's supported languages, columns are objects with public methods.
+- Column objects can't exist in isolation; each column is part of a row in a record, and all the rows together constitute a DataFrame.
+
+### Rows
+
+- A row in Spark is a Row object containing one or more columns.
+- Row is an ordered collection of fields which can be accessed by index starting at 0.
+
 </details>
+
+<details>
+  <summary>Common DataFrame Operations</summary>
+
+### Common DataFrame Operations
+
+- DataFrameReader allows you to read data into a DataFrame from different sources e.g., JSON, CSV, Parequet, Avro, etc.
+- DataFrameWriter allows you to write a DataGrame back to a data source.
+- Example:
+```python
+from pyspark.sql.types import *
+
+# Programmatic way to define a schema
+fire_schema = StructType([StructField('CallNumber', IntegerType(), True),
+                StructField('UnitID', StringType(), True),
+                StructField('IncidentNumber', IntegerType(), True),
+                StructField('CallType', StringType(), True),
+                StructField('CallDate', StringType(), True),
+                StructField('WatchDate', StringType(), True),
+                StructField('CallFinalDisposition', StringType(), True),
+                StructField('AvailableDtTm', StringType(), True),
+                StructField('Address', StringType(), True),
+                StructField('City', StringType(), True),
+                StructField('Zipcode', IntegerType(), True),
+                StructField('Battalion', StringType(), True),
+                StructField('StationArea', StringType(), True),
+                StructField('Box', StringType(), True),
+                StructField('OriginalPriority', StringType(), True),
+                StructField('Priority', StringType(), True),
+                StructField('FinalPriority', IntegerType(), True),
+                StructField('ALSUnit', BooleanType(), True),
+                StructField('CallTypeGroup', StringType(), True),
+                StructField('NumAlarms', IntegerType(), True),
+                StructField('UnitType', StringType(), True),
+                StructField('UnitSequenceInCallDispatch', IntegerType(), True),
+                StructField('FirePreventionDistrict', StringType(), True),
+                StructField('SupervisorDistrict', StringType(), True),
+                StructField('Neighborhood', StringType(), True),
+                StructField('Location', StringType(), True),
+                StructField('RowID', StringType(), True),
+                StructField('Delay', FloatType(), True)])
+
+# Use the DataFrameReader interface to read a CSV file
+sf_fire_file = "/databricks-datasets/learning-spark-v2/sf-fire/sf-fire-calls.csv"
+fire_df = spark.read.csv(sf_fire_file, header=True, schema=fire_schema)
+```
+- `spark.read.csv()` reads in CSV file and returns a DataFrame of rows and named columns with the types dictated in the schema.
+- Parquet is the default format for `DataFrameWriter`.
+
+### Saving a DataFrame as a Parquet File or SQL Table
+
+- Example of persisting a DataFrame into a Parquet file or SQL table:
+```python
+// Save as a Parquet file
+parquet_path = ...
+fire_df.write.format("parquet").save(parquet_path)
+
+parquet_table = ... # name of the table
+fire_df.write.format("parquet").saveAsTable(parquet_table)
+```
+
+### Transformations and Actions
+
+- Once DataFrame is read into memory we can perform transformations and actions on it.
+
+### Projection and Filters
+
+- Projection in relational parlance returns only rows matching a certain relational condition by filters.
+    * `select()` used for projections.
+    * `filter()` or `where()` used for filters.
+- Example:
+```python
+few_fire_df = (fire_df
+      .select("IncidentNumber", "AvailableDtTm", "CallType")
+      .where(col("CallType") != "Medical Incident"))
+few_fire_df.show(5, truncate=False)
+```
+
+### Renaming, Adding and Dropping Columns
+
+- Example renaming columns:
+```python
+new_fire_df = fire_df.withColumnRenamed("Delay", "ResponseDelayedinMins")
+(new_fire_df
+    .select("ResponseDelayedinMins")
+    .where(col("ResponseDelayedinMins") > 5)
+    .show(5, False))
+```
+- We can transform column types with methods such as `to_timestamp()`, `to_date()`, etc.
+
+### Aggregations
+
+- Handful of transformations aggregate by column names and then aggregate counts across them e.g., `groupBy()`, `orderBy()`, `count()`, etc.
+
+### Other Common DataFrame Operations
+
+- DataFrame API provids statisical methods e.g., `min()`, `max()`, `sum()`, `avg()`, etc.
+
+</details>
+
+<details>
+  <summary>DataFrames Versus Datasets</summary>
+
+### DataFrames Versus Datasets
+
+- If you require relational transformations similar to SQL-like queries, use DataFrames.
+- Use Datasets if you want to take advantage of Tungsten's efficient serialization with Encoders.
+- Use DataFrames if you want unification, code optimization and simplification of APIs across Spark components.
+- For space and efficiency use DataFrames.
+
+### When to Use RDDs
+
+- When using a third-party package written using RDDs.
+- Want to precisely instruct Spark how to do a query.
+
+</details>
+
+<details>
+  <summary>Spark SQL and the Underlying Engine</summary>
+
+### Spark SQL and the Underlying Engine
+
+- Spark SQL allows developers to issue SQL compatible queries on structured data with a schema.
+- Additionally, Spark SQL engine:
+    * Unifies Spark components and permits abstractions to DataFrame/Datasets in multiple languages.
+    * Reads and writes structured data with a specific schema from structured file formats (JSON, CSV, Text, Avro, Parquet), and converts data into temporary tables.
+    * Interactive Spark SQL shell for quick data exploration.
+    * Connects to external tools via standard database JDBC/ODBC connectors.
+    * Generates optimized query plans for the JVM.
+
+### The Catalyst Optimizer
+
+- Takes a computational query and converts it into an execution plan in four phases:
+    1. Analysis
+        * Spark SQL engine generates an abstract syntax tree for the DataFrame query.
+    2. Logical optimization
+        * Uses a rules based optimization approach to construct a set of plans.
+    3. Physical planning
+        * Generates an optimal physical plan for the above selected logical plan.
+    4. Code generation
+        * Generates efficient Java bytecode to run on each machine.
+        * Project Tungsten facilitates whole-stage code generation which coollapses the query into a single function, eliminating virtual function calls and employing CPU registers for intermediate data.
+        * This improves CPU efficiency and performance.
+- To view the execution plan for a Python DataFrame: `dataframe.explain(True)`
+
+</details>
+
+## Chapter 4: Spark SQL and DataFrames
+
+<details>
+  <summary>Using Spark SQL in Spark Applications</summary>
+
+### Using Spark SQL in Spark Applications
+
+- Use `SparkSession` to access Spark functionality.
+- Use `sql()` method to issue any SQL query which will return a DataFrame.
+- Example of using a schema to read data into a DataFrame and register DataFrame as a temporary view to query it with SQL.
+```python
+from pyspark.sql import SparkSession # Create a SparkSession
+spark = (SparkSession
+      .builder
+      .appName("SparkSQLExampleApp")
+      .getOrCreate())
+# Path to data set
+csv_file = "/databricks-datasets/learning-spark-v2/flights/departuredelays.csv"
+# Read and create a temporary view
+# Infer schema (note that for larger files you
+# may want to specify the schema)
+df = (spark.read.format("csv")
+      .option("inferSchema", "true")
+      .option("header", "true")
+      .load(csv_file))
+df.createOrReplaceTempView("us_delay_flights_tbl")
+
+spark.sql("""SELECT distance, origin, destination
+    FROM us_delay_flights_tbl WHERE distance > 1000
+    ORDER BY distance DESC""").show(10)
+```
+
+</details>
+
+<details>
+  <summary>SQL Tables and Views</summary>
+
+### SQL Tables and Views
+
+- Each table in Spark has metadata e.g., schema, description, name, column names, partitions, etc.
+- All this is stored in a central metastore.
+- Spark by default uses Hive metastore in `/usr/hive/warehouse`
+
+</details>
+
+<details>
+  <summary>Managed Versus Unmanaged Tables</summary>
+
+### Managed Versus Unmanaged Tables
+
+- For managed tables, Spark manages metadata and data in the file store e.g., local filesystem, HDSFS, S3.
+- For unmanaged tables, Spark only manages the metadata and you manage the data in external data sources e.g., Cassandra.
+    * If you do a `DROP TABLE`, only the table is deleted from metadata.
+
+</details>
+
+<details>
+  <summary>Creating SQL Databases and Tables</summary>
+
+### Creating SQL Databases and Tables
+
+- Spark creates tables in `default` database by default.
+- Create a database:
+```python
+spark.sql("CREATE DATABASE learn_spark_db")
+spark.sql("USE learn_spark_db")
+```
+- Create a managed table:
+```python
+spark.sql("CREATE TABLE managed_us_Delay_flight_tbl (date STRING, delay INT, distance INT, origin STRING, destination STRING)")
+```
+- Create an unmanaged table from a data source:
+```python
+spark.sql("""CREATE TABLE us_delay_flights_tbl(date STRING, delay INT,
+      distance INT, origin STRING, destination STRING)
+      USING csv OPTIONS (PATH
+      '/databricks-datasets/learning-spark-v2/flights/departuredelays.csv')""")
+```
+
+</details>
+
+<details>
+  <summary>Creating Views</summary>
+
+### Creating Views
+
+- Spark can create views on top of tables.
+- They can be global or session-scoped, and are temporary (gone after Spark application terminates).
+- Example:
+```python
+df_sfo = spark.sql("SELECT date, delay, origin, destination FROM us_delay_flights_tbl WHERE origin = 'SFO'")
+df_jfk = spark.sql("SELECT date, delay, origin, destination FROM us_delay_flights_tbl WHERE origin = 'JFK'")
+# Create a temporary and global temporary view
+df_sfo.createOrReplaceGlobalTempView("us_origin_airport_SFO_global_tmp_view")
+df_jfk.createOrReplaceTempView("us_origin_airport_JFK_tmp_view")
+# Perform queries
+spark.sql("SELECT * FROM us_origin_airport_JFK_tmp_view")
+# Drop views
+spark.catalog.dropGlobalTempView("us_origin_airport_SFO_global_tmp_view")
+spark.catalog.dropTempView("us_origin_airport_JFK_tmp_view")
+```
+- Spark manages metadata of managed and unmanaged tables, captured in the Catalog.
+- Catalog is a high-level abstraction in Spark SQL for storing metadata.
+- Example:
+```python
+spark.catalog.listDatabases()
+spark.catalog.listTables()
+spark.catalog.listColumns("us_delay_flights_tbl")
+```
+
+</details>
+
+<details>
+  <summary>Data Sources for DataFrames and SQL Tables</summary>
+
+### Data Sources for DataFrames and SQL Tables
+
+#### DataFrameReader
+
+- `DataFrameReader` is the core construct for reading data from a data source into DataFrame.
+- Usage:
+```
+DataFrameReader.format(args).option("key", "value").schema(args).load()
+```
+- To get an instance handle of `DataFrameReader`, use `SparkSession.read` or `SparkSession.readStream`.
+- `format()`
+    * Arguments include `parquet`, `csv`, `txt`, `json`, `jdbc`, `orc`, `avro`, etc.
+- `option()`
+    * Arguments include `mode`, `inferSchema`, `path`.
+- `schema()`
+    * Argument is a DDL string or struct e.g., `A INT, B STRING`.
+- `load`
+    * Argument is `/path/to/data/source`
+- Parquet is the default and preferred data source for Spark because it is efficient, uses columnar storage, and employs a fast compression algorithm.
+
+#### DataFrameWriter
+
+- `DataFrameWriter` writes data to a specified built-in data source.
+- Usages:
+```
+DataFrameWriter.format(args)
+      .option(args)
+      .bucketBy(args)
+      .partitionBy(args)
+      .save(path)
+
+DataFrameWriter.format(args).option(args).sortBy(args).saveAsTable(table)
+```
+- To get an instance handle: `DataFrame.write` or `DataFrane.writeStream`.
+- `format()`
+    * Arguments include `parquet`, `csv`, `txt`, `json`, `jdbc`, `orc`, `avro`, etc.
+- `option()`
+    * Arguments include `mode`, `path`.
+- `bucketBy()`
+    * Arguments include `numBuckets`, and names of columns to bucket by.
+- `save()`
+    * Arguments include `/path/to/data/source`.
+- `saveAsTable()`
+    * Arguments include `table_name`.
+
+#### Parquet
+
+- Default data source in Spark.
+- Open-soource columnar file format offering many I/O optimizations.
+- Recommend to save DataFrames in Parquet for downstream applicatioons.
+- Parquet files stored in directory structure containing data files, metadata, compressed files and status files.
+- To read Parquet files into a DataFrame:
+```python
+file = """/databricks-datasets/learning-spark-v2/flights/summary-data/parquet/
+      2010-summary.parquet/"""
+df = spark.read.format("parquet").load(file)
+```
+- Note no need to supply schema since Parquet saves it as part of metadata.
+- Can also create a Spark SQL unmanaged table/view using SQL:
+```sql
+CREATE OR REPLACE TEMPORARY VIEW us_delay_flights_tbl USING parquet
+OPTIONS (
+path "/databricks-datasets/learning-spark-v2/flights/summary-data/parquet/ 2010-summary.parquet/" )
+```
+- Then read data into a DataFrame using SQL:
+```python
+spark.sql("SELECT * FROM us_delay_flights_tbl").show()
+```
+- To write a DataFrame in Parquet:
+```python
+(df.write.format("parquet")
+      .mode("overwrite")
+      .option("compression", "snappy")
+      .save("/tmp/data/parquet/df_parquet"))
+```
+
+#### JSON
+
+- Single-line and multiline mode both supported in Spark.
+- In single-line mode, each line is a JSON object.
+- In multiline mode, the entire multiline oobject is a JSON object.
+- To read JSON into a DataFrame:
+```python
+file = "/databricks-datasets/learning-spark-v2/flights/summary-data/json/*"
+df = spark.read.format("json").load(file)
+```
+- To save a DataFrane as a JSON file:
+```python
+(df.write.format("json")
+      .mode("overwrite")
+      .option("compression", "snappy")
+      .save("/tmp/data/json/df_json")))
+```
+
+#### Other data source types
+
+- Other data source types covered include CSV, Avro, ORC, images (for deep learning frameworks),
+
+</detail>
+
+## Chapter 5: Interacting with External Data Souorces
