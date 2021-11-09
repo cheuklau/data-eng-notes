@@ -752,4 +752,102 @@ df = spark.read.format("json").load(file)
 
 </detail>
 
-## Chapter 5: Interacting with External Data Souorces
+## Chapter 5: Interacting with External Data Sources
+
+<details>
+  <summary>Spark SQL and Apache Hive</summary>
+
+### Spark SQL and Apache Hive
+
+- Spark SQL integrates relational processing with Spark's functional programming API.
+- `SparkSession` provides a unified entry point to manipulate data in Spark.
+- Spark allows engineers to create user-defined functions (UDFs).
+
+</details>
+
+<details>
+  <summary>Querying with Spark SQL Shell, Beeline and Tableau</summary>
+
+### Querying with Spark SQL Shell, Beeline and Tableau
+
+- `spark-sql` CLI can execute Spark SQL queries.
+- Can connect Tableau to Spark SQL using Thrift JDBC/ODBC server.
+
+</details>
+
+<details>
+  <summary>External Data Sources</summary>
+
+### External Data Sources
+
+- Spark SQL includes data source API that can read data from other databases using JDBC.
+- Simplifies querying data sources as it returns the results as a DataFrame.
+- Common connection properties:
+    * `user,password` - Connection properties
+    * `url` - JDBC connection URL
+    * `dbtable` - JDBC table to read from or write to
+    * `query` - query to be used to read from Spark
+    * `driver` - class name of JDBC driver to use to connect to URL
+- Important to partition data source.
+- Partitioning connection properties:
+    * `numPartitions` - max number of partitions for parallelism in table reading and writing
+        + Use a multiple of number of Spark workers
+    * `partitionColumn` - column used to determine the partitions
+    * `lowerBound` - min value of `partitionColumn` for partition stride
+    * `upperBound` - max value of `partitionColumn` for partition stride
+
+#### Postgres
+
+- Build or download JDBC jar from Maven and add to classpath
+- Example:
+```python
+# Read Option 1: Loading data from a JDBC source using load method
+jdbcDF1 = (spark
+            .read
+            .format("jdbc")
+            .option("url", "jdbc:postgresql://[DBSERVER]")
+            .option("dbtable", "[SCHEMA].[TABLENAME]")
+            .option("user", "[USERNAME]")
+            .option("password", "[PASSWORD]")
+            .load())
+
+# Read Option 2: Loading data from a JDBC source using jdbc method
+jdbcDF2 = (spark
+        .read
+        .jdbc("jdbc:postgresql://[DBSERVER]", "[SCHEMA].[TABLENAME]",
+                properties={"user": "[USERNAME]", "password": "[PASSWORD]"}))
+
+# Write Option 1: Saving data to a JDBC source using save method
+(jdbcDF1
+    .write
+    .format("jdbc")
+    .option("url", "jdbc:postgresql://[DBSERVER]")
+    .option("dbtable", "[SCHEMA].[TABLENAME]")
+    .option("user", "[USERNAME]")
+    .option("password", "[PASSWORD]")
+    .save())
+
+# Write Option 2: Saving data to a JDBC source using jdbc method
+(jdbcDF2
+    .write
+    .jdbc("jdbc:postgresql:[DBSERVER]", "[SCHEMA].[TABLENAME]",
+        properties={"user": "[USERNAME]", "password": "[PASSWORD]"}))
+```
+- Analogous for mysql, Azure CosmosDB, MS Sql server, Cassandra, Snowflake, MongoDB, etc.
+
+</details>
+
+<details>
+  <summary>Higher-Order Functions in DataFrames and Spark SQL</summary>
+
+### Higher-Order Functions in DataFrames and Spark SQL
+
+- Typically two solutions for manipulating complex data types:
+    1. Explode nested structure into individual rows, apply some function, recreate nested structure
+    2. Build user-defined function
+- Alternatively, youo can use built-in functions for complex data types that are included with Spark e.g., `array_distinct`, `array_intersect`, etc.
+- Higher-order functions take anonymous Lambda functions as arguments e.g., `transform` takes array of values and an anonymous Lambda function as input. It then creates a new array by applying anonymous function to each element.
+- Other higher-order functions include `filter`, `exists`, `reduce`
+
+</details>
+
