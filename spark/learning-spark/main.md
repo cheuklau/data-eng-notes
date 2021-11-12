@@ -851,3 +851,95 @@ jdbcDF2 = (spark
 
 </details>
 
+<details>
+  <summary>Common DataFrames and Spark SQL Operations</summary>
+
+### Common DataFrames and Spark SQL Operations
+
+- Spark SQL supports a wide range of DataFrame operations e.g., aggregate, collection, datetime, math, sorting, etc.
+- Example below:
+    1. Creates two DFs: `airportsna` and `departureDelays`
+    2. Uses `expr()` to convert `delay` and `distance` columns from `STRING` to `INT`
+    3. Create smaller table `foo` that will be used for demoing
+```python
+from pyspark.sql.functions import expr
+
+tripdelaysFilePath = "/databricks-datasets/learning-spark-v2/flights/departuredelays.csv"
+airportsnaFilePath = "/databricks-datasets/learning-spark-v2/flights/airport-codes-na.txt"
+
+# Obtain airports data set
+airportsna = (spark.read
+                .format("csv")
+                .options(header="true", inferSchema="true", sep="\t") .load(airportsnaFilePath))
+airportsna.createOrReplaceTempView("airports_na")
+
+# Obtain departure delays data set
+departureDelays = (spark.read
+                    .format("csv")
+                    .options(header="true")
+                    .load(tripdelaysFilePath))
+departureDelays = (departureDelays
+                    .withColumn("delay", expr("CAST(delay as INT) as delay"))
+                    .withColumn("distance", expr("CAST(distance as INT) as distance")))
+departureDelays.createOrReplaceTempView("departureDelays")
+
+# Create temporary small table
+foo = (departureDelays
+        .filter(expr("""origin == 'SEA' and destination == 'SFO' and date like '01010%' and delay > 0""")))
+foo.createOrReplaceTempView("foo")
+```
+
+#### Unions
+
+- Common Spark pattern is to union two different DFs with same schema together using `union()`
+```python
+# Union two tables
+bar = departureDelays.union(foo)
+bar.createOrReplaceTempView("bar")
+# Show the union (filtering for SEA and SFO in a specific time range)
+# This just results in the foo data
+bar.filter(expr("""origin == 'SEA' AND destination == 'SFO' AND date LIKE '01010%' AND delay > 0""")).show()
+```
+
+#### Joins
+
+- Common DF operation is to join two DFs together
+- Spark SQL by default performs an inner join
+```python
+foo.join(
+    airports,
+    airports.IATA == foo.origin
+).select("City", "State", "date", "delay", "distance", "destination").show()
+```
+
+#### Windowing
+
+- Window function uses values from rows in a window to return a set of values, typically in the form of another row
+- Examples using `dense_rank()`:
+```python
+spark.sql("""
+SELECT origin, destination, TotalDelays, rank
+    FROM (
+        SELECT origin, destination, TotalDelays, dense_rank()
+            OVER (PARTITION BY origin ORDER BY TotalDelays DESC) as rank
+            FROM departureDelaysWindow
+    ) t
+    WHERE rank <= 3
+""").show()
+```
+
+#### Modifications
+
+- Create new DataFrames that are modifications of existing DataFrames
+- Recall that DFs (and underlying RDDs) are immutable for data lineage
+- Example using `withColumn()` to add a new column:
+```python
+from pyspark.sql.functions import expr
+foo2 = (foo.withColumn(
+            "status",
+            expr("CASE WHEN delay <= 10 THEN 'On-time' ELSE 'Delayed' END")
+        ))
+```
+- We can also drop columns with `drop()`, rename with `rename()`
+
+## Chapter 6: Spark SQL and Datasets
